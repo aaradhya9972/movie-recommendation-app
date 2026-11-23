@@ -1,0 +1,176 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>CineMatch — Movie Recommendation System</title>
+<link rel="stylesheet" href="style.css">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%23f5b94a'/%3E%3Cpath d='M12 9l11 7-11 7z' fill='%230f1320'/%3E%3C/svg%3E">
+</head>
+<body>
+<header class="top">
+  <div class="brand"><span class="logo"><svg viewBox="0 0 32 32"><path d="M12 9l11 7-11 7z"/></svg></span><b>Cine<i>Match</i></b></div>
+  <nav id="nav">
+    <button data-tab="discover" class="on">Discover</button>
+    <button data-tab="foryou">For You</button>
+    <button data-tab="predict">Rating Predictor</button>
+    <button data-tab="analytics">Analytics</button>
+    <button data-tab="how">How it works</button>
+    <button data-tab="scope">Scope</button>
+  </nav>
+  <div class="pill" id="health"><span class="dot"></span><span id="healthTxt">connecting…</span></div>
+</header>
+
+<main>
+<!-- ================= DISCOVER ================= -->
+<section id="tab-discover" class="tab on">
+  <div class="hero">
+    <p class="eyebrow">Content-based · Collaborative · Hybrid</p>
+    <h1>Tell us one movie you loved.<br><em>We'll find your next one.</em></h1>
+    <div class="searchwrap">
+      <div class="search">
+        <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M20 20l-4-4"/></svg>
+        <input id="q" type="text" placeholder="Type a movie name — e.g. Inception, 3 Idiots, Toy Story…" autocomplete="off" spellcheck="false">
+        <button id="goBtn" class="btn">Recommend</button>
+      </div>
+      <ul id="suggest" class="suggest"></ul>
+    </div>
+    <div class="quick">Try: <button>Inception</button><button>3 Idiots</button><button>Toy Story</button><button>The Godfather</button><button>Titanic</button><button>The Dark Knight</button></div>
+  </div>
+
+  <div class="semantic-panel">
+    <div><b>Describe the movie you want</b><small>Local BGE-base-en-v1.5 embeddings · no API</small></div>
+    <div class="semantic-search"><input id="semanticQ" type="text" maxlength="500" placeholder="e.g. a feel-good heist film with clever twists"><button class="btn" id="semanticBtn">Find by meaning</button></div>
+    <p id="semanticStatus" class="note">Open CineMatch at http://127.0.0.1:5000 with the backend running. First search downloads BGE; inference runs locally. Add plot summaries in data/movie_overviews.csv for richer matches.</p>
+  </div>
+  <div id="semanticMsg" class="msg hidden"></div>
+  <div id="semanticResults" class="grid"></div>
+
+  <div id="mix" class="mix hidden"><span class="lbl">Your taste mix <small>(add up to 5 movies — we blend them)</small></span><div id="chips"></div><button id="clearMix" class="ghost">Clear</button></div>
+
+  <div class="controls">
+    <div class="seg" id="modeSeg">
+      <button data-m="hybrid" class="on">Hybrid</button><button data-m="content">Content-based</button><button data-m="collab">Collaborative</button>
+    </div>
+    <label class="ctl" id="alphaBox">Content weight <b id="alphaV">0.45</b><input id="alpha" type="range" min="0" max="1" step="0.05" value="0.45"></label>
+    <label class="ctl">Genre <select id="genre"><option value="">Any</option></select></label>
+    <label class="ctl">From year <input id="ymin" type="number" min="1930" max="2024" placeholder="1930"></label>
+    <label class="ctl">To <input id="ymax" type="number" min="1930" max="2024" placeholder="2024"></label>
+    <label class="ctl">Show <select id="nres"><option>8</option><option selected>12</option><option>20</option><option>30</option></select></label>
+  </div>
+
+  <div id="msg" class="msg hidden"></div>
+  <div id="trace" class="trace hidden"></div>
+  <h2 id="resTitle" class="sect">Top rated on CineMatch</h2>
+  <div id="grid" class="grid"></div>
+</section>
+
+<!-- ================= FOR YOU ================= -->
+<section id="tab-foryou" class="tab">
+  <div class="panelhead"><h2>Personal recommendations</h2><p>Matrix-factorisation (SVD/ALS) predicts what <em>this</em> user would rate every unseen movie, then ranks the best.</p></div>
+  <div class="row">
+    <label class="ctl big">User ID <input id="uid" type="number" min="1" value="42"></label>
+    <button class="btn" id="uidBtn">Recommend for this user</button><button class="ghost" id="uidRand">🎲 Random user</button>
+    <label class="ctl">Genre <select id="ugenre"><option value="">Any</option></select></label>
+  </div>
+  <div id="umsg" class="msg hidden"></div>
+  <div id="uprof" class="profile hidden"></div>
+  <div id="utrace" class="trace hidden"></div>
+  <h2 class="sect" id="uTitle" style="display:none">Recommended for this user</h2>
+  <div id="ugrid" class="grid"></div>
+</section>
+
+<!-- ================= PREDICT ================= -->
+<section id="tab-predict" class="tab">
+  <div class="panelhead"><h2>Rating prediction</h2><p>Pick a user and a movie. The model estimates the star rating that user would give, and shows how the number is built.</p></div>
+  <div class="row">
+    <label class="ctl big">User ID <input id="pu" type="number" min="1" value="7"></label>
+    <div class="searchwrap small"><div class="search"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M20 20l-4-4"/></svg><input id="pq" type="text" placeholder="Search a movie…" autocomplete="off"></div><ul id="psuggest" class="suggest"></ul></div>
+    <button class="btn" id="pBtn">Predict</button>
+  </div>
+  <div id="pout" class="predict hidden"></div>
+</section>
+
+<!-- ================= ANALYTICS ================= -->
+<section id="tab-analytics" class="tab">
+  <div class="panelhead"><h2>Model evaluation &amp; dataset analytics</h2><p>Trained on 80% of the ratings, tested on the unseen 20%.</p></div>
+  <div id="kpis" class="kpis"></div>
+  <div class="cols2">
+    <div class="card"><h3>Model comparison <small>RMSE / MAE — lower is better</small></h3><div id="modelTable"></div></div>
+    <div class="card"><h3>Test-set metrics <small>"liked it" = rating ≥ 4</small></h3><div id="cmetrics" class="metricrow"></div></div>
+  </div>
+  <div class="cols2">
+    <div class="card"><h3>Confusion matrix <small>like / dislike</small></h3><div id="cm2"></div><p class="note" id="cm2note"></p></div>
+    <div class="card"><h3>Confusion matrix <small>5 star classes, % of each actual rating</small></h3><div id="cm5"></div><p class="note" id="cm5note"></p></div>
+  </div>
+  <div class="cols2">
+    <div class="card"><h3>Rating distribution</h3><div id="chRating" class="chart"></div></div>
+    <div class="card"><h3>Ratings per genre</h3><div id="chGenre" class="chart"></div></div>
+  </div>
+  <div class="cols2">
+    <div class="card"><h3>RMSE vs latent factors (k)</h3><div id="chK" class="chart"></div></div>
+    <div class="card"><h3>Top-10 ranking quality</h3><div id="chRank" class="chart"></div></div>
+  </div>
+  <div class="cols2">
+    <div class="card"><h3>User activity <small>ratings per user</small></h3><div id="chUser" class="chart"></div></div>
+    <div class="card"><h3>Movie popularity long-tail</h3><div id="chTail" class="chart"></div></div>
+  </div>
+  <h2 class="sect">Report-ready graphs <small>(PNG files, also saved in artifacts/graphs/)</small></h2>
+  <div class="gallery" id="gallery"></div>
+</section>
+
+<!-- ================= HOW ================= -->
+<section id="tab-how" class="tab">
+  <div class="panelhead"><h2>How the system works</h2><p>Everything is computed locally from the 1,000,209-rating dataset. No external API.</p></div>
+  <div class="flow">
+    <div class="node"><b>1</b><h4>Frontend</h4><p>Browser (HTML/CSS/JS) or Java Swing app sends <code>GET /api/recommend?title=…</code></p></div><span class="arrow">→</span>
+    <div class="node"><b>2</b><h4>Flask backend</h4><p>Validates input, fuzzy-matches the title, calls the engine</p></div><span class="arrow">→</span>
+    <div class="node"><b>3</b><h4>ML engine</h4><p>TF-IDF · item-item CF · SVD/ALS matrix factorisation on the sparse rating matrix</p></div><span class="arrow">→</span>
+    <div class="node"><b>4</b><h4>JSON</h4><p>Ranked movies, scores, explanations and a timing trace</p></div><span class="arrow">→</span>
+    <div class="node"><b>5</b><h4>GUI</h4><p>Posters, match %, "why recommended", analytics</p></div>
+  </div>
+  <div class="card wide"><h3>What happens when you type a movie name?</h3>
+    <ol class="steps">
+      <li><b>Autocomplete.</b> Every keystroke calls <code>/api/search</code>. The backend normalises text (lower-case, strip punctuation), scores exact / prefix / substring matches and falls back to <em>difflib</em> fuzzy matching, so “incepshun” still finds <em>Inception</em>.</li>
+      <li><b>Resolve.</b> The title becomes a <code>movie_id</code> → a row index in the matrices.</li>
+      <li><b>Content-based score.</b> Each movie is a text document: <code>genres ×3 + keywords + decade</code>. <b>TF-IDF</b> turns it into a vector (rare words weigh more). <b>Cosine similarity</b> between the query vector and all 3,700 movies gives a content score.</li>
+      <li><b>Collaborative score.</b> The sparse <i>user × movie</i> matrix (1M ratings) is mean-centred per user (so a harsh and a generous user are comparable). The <b>adjusted-cosine</b> similarity of the query’s rating column against all other columns says “people who rated this like that, also rated those like this”. A <b>shrinkage factor</b> n/(n+25) lowers trust in pairs with few common raters.</li>
+      <li><b>Hybrid blend.</b> <code>score = α·content + (1−α)·collaborative</code>. This fixes the weaknesses of each: content-only can’t see taste, CF-only fails on new/rare movies (cold start).</li>
+      <li><b>Filter &amp; rank.</b> Remove the query movie, apply genre / year filters, add a mild popularity prior, sort, take top-N.</li>
+      <li><b>Explain.</b> For each result the API returns shared genres &amp; keywords, content % and collaborative % — shown on the cards and in the “Behind the scenes” panel with timings.</li>
+    </ol></div>
+  <div class="cols2">
+    <div class="card"><h3>Matrix factorisation (SVD / ALS)</h3>
+      <p>Every user <i>u</i> and movie <i>i</i> gets a short vector of <b>k=20 hidden “taste” factors</b>. The predicted rating is</p>
+      <p class="formula">r̂<sub>ui</sub> = μ + b<sub>u</sub> + b<sub>i</sub> + p<sub>u</sub> · q<sub>i</sub></p>
+      <p>μ = global mean, b<sub>u</sub> = how generous the user is, b<sub>i</sub> = how good the movie is, p·q = how well this user’s taste matches this movie. Vectors are learned by <b>Alternating Least Squares</b> — fix movies, solve for users with ridge regression, then swap — repeated 12 times.</p></div>
+    <div class="card"><h3>Evaluation</h3>
+      <ul class="tick"><li><b>RMSE / MAE</b> on 199,414 unseen ratings</li><li><b>Confusion matrix</b> — “liked” (≥4★) vs predicted “liked” (≥3.5★): accuracy, precision, recall, F1, ROC-AUC</li><li><b>Top-N ranking</b> — Precision@10, Recall@10, NDCG@10, Hit-rate@10 against Random and Popularity baselines</li><li><b>Hyper-parameter study</b> — RMSE vs k</li></ul></div>
+  </div>
+  <div class="card wide"><h3>Project files</h3><pre class="tree">movie_recsys/
+├─ data/                 movies.csv · ratings.csv (1,000,209 rows) · users.csv
+├─ backend/
+│  ├─ generate_dataset.py   builds / converts the dataset
+│  ├─ recsys.py             TF-IDF · item-CF · ALS matrix factorisation · Engine
+│  ├─ train.py              split, train, evaluate, confusion matrix, graphs
+│  └─ app.py                Flask REST API + serves this GUI
+├─ frontend/              index.html · style.css · app.js   (this page)
+├─ java/MovieRecApp.java  Java Swing desktop client
+└─ artifacts/             model.pkl · metrics.json · stats.json · graphs/*.png</pre></div>
+</section>
+
+<!-- ================= SCOPE ================= -->
+<section id="tab-scope" class="tab">
+  <div class="panelhead"><h2>Scope, limitations &amp; future work</h2></div>
+  <div class="cols3">
+    <div class="card"><h3>🎯 Applications</h3><ul class="tick"><li>OTT platforms (Netflix, Prime, Hotstar style “More like this”)</li><li>Music, books, e-commerce and course recommendation — same maths, different items</li><li>Personalised home-screens and email campaigns</li><li>Cinema / theatre programming from audience taste clusters</li></ul></div>
+    <div class="card"><h3>⚠️ Limitations</h3><ul class="tick"><li>Cold-start: brand-new users / movies have no ratings (content model helps)</li><li>Sparsity: ~96% of the user–movie matrix is empty</li><li>Popularity bias: popular titles get recommended more</li><li>Dataset is offline and static; no real-time feedback loop</li></ul></div>
+    <div class="card"><h3>🚀 Future scope</h3><ul class="tick"><li>Neural collaborative filtering / autoencoders / transformers (sequence-aware)</li><li>Context (time, device, mood), diversity &amp; fairness re-ranking</li><li>Online learning with click feedback, A/B testing</li><li>Real posters, trailers, multi-language support</li></ul></div>
+  </div>
+  <div class="card wide"><h3>Local generative-AI semantic search</h3><p>Natural-language descriptions are embedded with the locally run <code>BAAI/bge-base-en-v1.5</code> encoder and ranked by cosine similarity (it matches meaning rather than generating text). The model is downloaded from Hugging Face on first use and cached locally; there are no inference API calls. By default, the project embeds movie titles, genres, and keywords. To include plot summaries, provide <code>data/movie_overviews.csv</code> with <code>movie_id,plot_summary</code> columns; summaries are matched by movie ID and included in the embedding index.</p></div>
+  <div class="card wide"><h3>Dataset note</h3><p>The bundled dataset is <b>synthetic</b> (generated by <code>generate_dataset.py</code> with user taste clusters, movie quality and popularity long-tail) but has exactly the same shape as <b>MovieLens-1M</b>: 6,040 users · 3,700 movies · 1,000,209 ratings. Real MovieLens-1M files can be converted with <code>python backend/generate_dataset.py --movielens path/to/ml-1m</code> and the whole project retrains on them unchanged.</p></div>
+</section>
+</main>
+<footer>CineMatch · Generative-AI course project · all computation is local — no API calls</footer>
+<script src="app.js"></script>
+</body>
+</html>
