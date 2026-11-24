@@ -1,83 +1,815 @@
-# CineMatch — Movie Recommendation System (Generative-AI course project)
+# CineMatch
 
-Backend (Python/Flask + ML) · Frontend (HTML/CSS/JS) · Desktop GUI (Java Swing) · **no external API**.
+CineMatch is an end-to-end movie recommendation application built with Python, Flask, HTML/CSS/JavaScript, and an optional Java Swing desktop client.
 
-## Run
+It combines:
+
+- **Content-based filtering** using genres, themes, keywords, and release decade
+- **Item-based collaborative filtering** using adjusted cosine similarity
+- **Matrix factorization** for personalized star-rating prediction
+- **Hybrid recommendations** that blend content and collaborative signals
+- **Local semantic search** using the BGE sentence-transformer model
+
+The system does not require an external recommendation API. Its data, embeddings, and trained model run locally.
+
+---
+
+## Table of contents
+
+- [Features](#features)
+- [Architecture](#architecture)
+- [Dataset](#dataset)
+- [Recommendation methods](#recommendation-methods)
+- [Model training and evaluation](#model-training-and-evaluation)
+- [Installation](#installation)
+- [Running the project](#running-the-project)
+- [Using the applications](#using-the-applications)
+- [REST API](#rest-api)
+- [Project structure](#project-structure)
+- [Configuration](#configuration)
+- [Limitations](#limitations)
+- [Future improvements](#future-improvements)
+- [Troubleshooting](#troubleshooting)
+- [Viva and interview questions](#viva-and-interview-questions)
+
+---
+
+## Features
+
+### Movie discovery
+
+- Search movies by title with exact, prefix, substring, fuzzy, and popularity-aware matching
+- Discover movies using natural-language descriptions
+- Filter recommendations by genre and release-year range
+- Explore popular titles from the complete dataset
+
+### Recommendation modes
+
+- **Hybrid:** balances content similarity and collaborative similarity
+- **Content:** recommends movies that share genres, themes, and metadata
+- **Collaborative:** recommends movies that users with similar rating patterns prefer
+- **For You:** predicts the ratings for every unseen movie for a selected user
+
+### Rating prediction
+
+- Predicts a rating from 1 to 5 stars
+- Breaks a prediction into global mean, user bias, item bias, and latent-factor interaction components
+- Converts ratings into a binary “like”/“dislike” decision using a tuned threshold
+
+### Analytics
+
+- Compares baseline, bias, item-kNN, and SVD/ALS models
+- Reports RMSE and MAE
+- Visualizes confusion matrices and ranking metrics
+- Displays dataset sparsity, rating distribution, genre averages, and decade information
+
+---
+
+## Architecture
+
+```text
+Browser or Java Swing client
+        |
+        | HTTP / JSON
+        v
+Flask REST API (backend/app.py)
+        |
+        +-- Recommendation engine (backend/recsys.py)
+        |     +-- TF-IDF content model
+        |     +-- Item-item collaborative model
+        |     +-- Biased matrix-factorization model
+        |
+        +-- Semantic search (backend/semantic.py)
+              +-- BGE embeddings
+              +-- Local embedding cache
+```
+
+The main execution flow is:
+
+1. `generate_dataset.py` creates the movie, user, and rating data.
+2. `train.py` evaluates the models and writes JSON metrics and graphs.
+3. `train.py` trains the final matrix-factorization model on all ratings.
+4. `app.py` loads the serialized `Engine` from `artifacts/model.pkl`.
+5. The browser or Java client consumes the local Flask REST API.
+
+---
+
+## Dataset
+
+The bundled dataset contains **1,000,209 ratings**:
+
+| Entity | Count |
+|---:|---:|
+| Ratings | 1,000,209 |
+| Users | 6,040 |
+| Movies | 3,700 |
+
+The data is synthetic and is designed to have structure similar to MovieLens-1M. Ratings are generated using combinations of:
+
+- User taste clusters
+- Movie quality and popularity
+- Genre preferences
+- Release-year and popularity effects
+- Random user behavior
+
+The movie catalog includes 194 real famous films, including Hollywood and Bollywood titles. The remaining titles are generated.
+
+The generated files are stored in:
+
+```text
+data/
+├── movies.csv
+├── ratings.csv
+└── users.csv
+```
+
+### Data sparsity
+
+The rating matrix has shape:
+
+\[
+6040 \times 3700
+\]
+
+It contains 1,000,209 observed ratings out of approximately 22.35 million possible user/movie pairs. This gives approximately 95.5% sparsity.
+
+The sparsity is calculated as:
+
+\[
+1-\frac{\text{number of ratings}}{\text{number of users} \times \text{number of movies}}
+\]
+
+### Real MovieLens-1M
+
+The project can be adapted to real MovieLens-1M data. The README and application do not require hard-coded synthetic results.
+
 ```bash
-pip install -r requirements.txt
-python backend/generate_dataset.py   # 1,000,209 ratings  -> data/   (3 s)   [already included]
-python backend/train.py              # train + evaluate + graphs (~75 s)    [already included]
-python backend/app.py                # open http://127.0.0.1:5000
-# Java GUI (needs the backend running):
-cd java && javac MovieRecApp.java && java MovieRecApp
+python backend/generate_dataset.py --movielens path/to/ml-1m
+python backend/train.py
+python backend/app.py
 ```
-Windows: double-click `run.bat`. Linux/Mac: `./run.sh`.
-Keep the backend window open and open **http://127.0.0.1:5000** in your browser; do not open `frontend/index.html` directly (`file://` cannot reach the local API). On Windows, `run.bat` installs the requirements and starts the backend.
 
-## Dataset (1 million)
-`data/ratings.csv` = **1,000,209 ratings**, 6,040 users, 3,700 movies (same size as MovieLens-1M).
-It is **synthetic**: generated with user taste-clusters, movie quality, popularity long-tail, so ML has real structure to learn.
-194 titles are real famous films (Hollywood + Bollywood), the rest are generated titles.
-To use the *real* MovieLens-1M: download it from grouplens.org, then
-`python backend/generate_dataset.py --movielens path/to/ml-1m && python backend/train.py` — nothing else changes.
-(Say in your report which one you used.)
+When reporting results, clearly state whether the metrics come from synthetic data or MovieLens-1M.
 
-## Algorithms
-| Model | Idea | Used for |
-|---|---|---|
-| Content-based | TF-IDF of genres×3 + keywords + decade → cosine similarity | "movies like X" |
-| Item-item collaborative filtering | user-mean-centred ratings → adjusted cosine between movie columns, shrunk by n/(n+25) | "movies like X" |
-| Hybrid | α·content + (1−α)·collaborative (slider in GUI) | default |
-| Matrix factorisation (SVD-style, ALS) | r̂ = μ + b_u + b_i + p_u·q_i, k=20 factors | rating **prediction**, "For You" |
-| Local semantic search | BGE-base-en-v1.5 embeddings + cosine similarity | natural-language movie discovery |
+---
 
-### Natural-language semantic search (no inference API)
-Use the **Describe the movie you want** box in Discover (for example, “a feel-good heist film with clever twists”). The first search downloads `BAAI/bge-base-en-v1.5` from Hugging Face; subsequent embedding and search runs locally, with movie embeddings cached under `artifacts/`. Install `requirements.txt` before starting the backend. Model download requires an internet connection once. BGE is a text-embedding encoder (it ranks semantic matches; it does not generate plot text).
+## Recommendation methods
 
-The bundled dataset has no plot summaries, so it searches title, genre, and keyword metadata by default. To add plot-aware matching, place `data/movie_overviews.csv` with columns `movie_id,plot_summary`; only summaries for matching movie IDs are used. The existing dataset and rating-based recommendations are unchanged.
+## 1. Content-based recommendations
 
-## What happens when you type a movie name
-1. Browser/Java calls `GET /api/search?q=incep` on every keystroke → backend normalises text, scores exact/prefix/substring/fuzzy (difflib) matches → autocomplete list.
-2. You pick a title → `GET /api/recommend?ids=2&mode=hybrid&n=12`.
-3. Flask (`backend/app.py`) validates parameters and calls `Engine.similar()` (`backend/recsys.py`).
-4. **Content score**: TF-IDF vector of the movie × TF-IDF matrix of all 3,700 movies (cosine).
-5. **Collaborative score**: movie's column of the 1M-rating matrix vs all other columns (adjusted cosine + shrinkage).
-6. Blend, apply genre/year filters, remove the movie itself, multiply by a mild popularity prior, take top-N.
-7. Return JSON: ranked movies + match %, content %, collab %, shared genres/themes + a **timing trace** (shown as "Behind the scenes").
-8. GUI draws cards. Typical latency: 10–40 ms.
+Each movie is represented by metadata text containing:
 
-Multiple movies can be added to the "taste mix": their score vectors are averaged.
+- Genres repeated for additional weight
+- Keywords and themes
+- A release-decade feature
 
-## Evaluation (70/15/15 split: 700,424 train / 150,342 validation / 149,443 test)
+The text is converted into TF-IDF vectors and normalized. Similarity is calculated using cosine similarity:
+
+\[
+cosine(a,b)=\frac{a \cdot b}{\|a\|\|b\|}
+\]
+
+This method is useful for cold-start movies because it only requires movie metadata. It works especially well for:
+
+- Finding movies with the same genres
+- Finding films with similar themes
+- Recommending based on one or more seed movies
+
+## 2. Item-item collaborative filtering
+
+Collaborative filtering compares movie rating columns from the sparse user-by-movie matrix.
+
+Before similarity is calculated, each user's ratings are mean-centred:
+
+\[
+r'_{ui}=r_{ui}-\mu_u
+\]
+
+The resulting vectors are cosine-normalized and used to compute adjusted cosine similarity.
+
+Similarity is shrunk when the number of common raters is small:
+
+\[
+similarity_{shrunk}=similarity \times \frac{n}{n+25}
+\]
+
+Here, `n` is the number of users who rated both movies. Shrinkage prevents a pair of movies from appearing perfectly similar when they have only one or two raters in common.
+
+## 3. Hybrid recommendations
+
+For one or more selected movies, the engine averages content and collaborative vectors.
+
+The default hybrid score is:
+
+\[
+S=\alpha S_{content}+(1-\alpha)S_{collaborative}
+\]
+
+The default value is `alpha = 0.45`.
+
+- `alpha = 1.0` uses content-only recommendations
+- `alpha = 0.0` uses collaborative-only recommendations
+- Values between 0 and 1 blend both approaches
+
+Before ranking, the engine:
+
+1. Normalizes both score sources
+2. Removes the selected movie or taste-profile movies
+3. Applies genre and year filters
+4. Keeps only movies with at least 30 ratings
+5. Applies a small popularity factor
+6. Sorts and returns the top N results
+
+Multiple selected movies produce an averaged taste profile.
+
+## 4. Matrix factorization
+
+The personalized rating model uses a biased SVD-style latent-factor model trained with alternating least squares (ALS):
+
+\[
+\hat r_{ui}=\mu+b_u+b_i+p_u\cdot q_i
+\]
+
+Where:
+
+- \(\mu\) is the global mean rating
+- \(b_u\) is the user bias
+- \(b_i\) is the movie bias
+- \(p_u\) is the latent taste vector for user `u`
+- \(q_i\) is the latent attribute vector for movie `i`
+
+Predictions are restricted to the range 1 to 5.
+
+The tuned model uses:
+
+| Parameter | Value |
+|---|---:|
+| Latent factors (`k`) | 20 |
+| Regularization (`reg`) | 0.06 |
+| ALS iterations | 20 |
+| Like threshold | 4 stars |
+| Prediction threshold | 3.25 |
+| Popularity prior weight | 1.6 |
+
+The model is trained on the training matrix for evaluation. A final model is retrained on all available ratings and saved to `artifacts/model.pkl` for serving.
+
+## 5. Local semantic search
+
+Natural-language search uses `BAAI/bge-base-en-v1.5` through `sentence-transformers`.
+
+The first semantic search downloads the model and creates embeddings for:
+
+- Movie title
+- Genres
+- Keywords
+- Optional plot summaries
+
+Embeddings are normalized, and query/document similarity is measured with cosine similarity. A cache of the embeddings is stored in `artifacts/bge_movie_embeddings.npz`.
+
+Optional plot summaries can be provided by creating:
+
+```text
+data/movie_overviews.csv
+```
+
+with columns:
+
+```csv
+movie_id,plot_summary
+```
+
+The cached index is regenerated when the movie documents or model name change.
+
+---
+
+## Model training and evaluation
+
+## Train-validation-test split
+
+Ratings are split deterministically using a NumPy random generator:
+
+| Split | Size |
+|---|---:|
+| Training | 700,424 |
+| Validation | 150,342 |
+| Test | 149,443 |
+
+The split is approximately 70%/15%/15%.
+
+- Training is used to fit models
+- Validation is used to tune hyperparameters and thresholds
+- Test data is used only for final reporting
+
+## Rating prediction metrics
+
+### RMSE
+
+Root Mean Squared Error:
+
+\[
+RMSE=\sqrt{\frac{1}{n}\sum_{i=1}^{n}(r_i-\hat r_i)^2}
+\]
+
+RMSE penalizes large prediction errors more strongly. Lower is better.
+
+### MAE
+
+Mean Absolute Error:
+
+\[
+MAE=\frac{1}{n}\sum_{i=1}^{n}|r_i-\hat r_i|
+\]
+
+MAE reports the average distance between actual and predicted ratings.
+
+### Model comparison
+
 | Model | RMSE | MAE |
-|---|---|---|
+|---|---:|---:|
 | Global mean | 1.0653 | 0.9089 |
-| User+Item bias | 0.9143 | 0.7441 |
-| Item-kNN (4,000-rating sample) | 0.8656 | 0.6997 |
-| **SVD/ALS (k=20, reg=0.06, 20 iterations)** | **0.8221** | **0.6574** |
+| User + item bias | 0.9143 | 0.7441 |
+| Item-kNN, 4,000-rating sample | 0.8656 | 0.6997 |
+| **SVD/ALS, k=20** | **0.8221** | **0.6574** |
 
-Hyperparameters are selected against the validation split; the final serving model is retrained on all ratings. The binary like threshold is 4 stars, and the prediction threshold is tuned on validation data (3.25). On the held-out test split: accuracy 70.9 %, precision 67.0 %, recall 89.9 %, F1 76.8 %, ROC-AUC 0.816. Ranking @10 (600 users) with the tuned popularity prior (weight 1.6): Precision 0.13, NDCG 0.178, hit rate 0.688.
-All numbers are in `artifacts/metrics.json` and the **Analytics** tab; PNG graphs are in `artifacts/graphs/`.
-(Numbers apply to the synthetic data; real MovieLens will give different values, e.g. RMSE ≈ 0.85–0.87.)
+These values are saved in `artifacts/metrics.json`.
 
-## Files
+## Binary classification metrics
+
+A rating of 4 or 5 is considered a “like.” The model predicts a like when its predicted rating is at least 3.25.
+
+The confusion matrix contains:
+
+|  | Predicted dislike | Predicted like |
+|---|---:|---:|
+| Actual dislike | TN | FP |
+| Actual like | FN | TP |
+
+### Accuracy
+
+\[
+Accuracy=\frac{TP+TN}{TP+TN+FP+FN}
+\]
+
+### Precision
+
+\[
+Precision=\frac{TP}{TP+FP}
+\]
+
+### Recall
+
+\[
+Recall=\frac{TP}{TP+FN}
+\]
+
+### F1 score
+
+\[
+F1=2\frac{Precision \times Recall}{Precision+Recall}
+\]
+
+### ROC-AUC
+
+ROC-AUC evaluates how successfully the continuous predicted rating separates liked and disliked movies, independent of one fixed threshold.
+
+### Held-out test results
+
+| Metric | Result |
+|---|---:|
+| Binary accuracy | 70.9% |
+| Precision | 67.0% |
+| Recall | 89.9% |
+| F1 | 76.8% |
+| ROC-AUC | 0.8165 |
+| Exact 5-star accuracy | 44.99% |
+| Within-one-star accuracy | 93.32% |
+
+## Ranking metrics
+
+Ranking quality is evaluated for 600 users using top-10 recommendations. Relevant movies are test ratings of 4 stars or higher.
+
+Movies the user already rated in the training matrix are removed.
+
+### Precision@10
+
+\[
+Precision@10=\frac{\text{relevant items in top 10}}{10}
+\]
+
+### Recall@10
+
+\[
+Recall@10=\frac{\text{relevant items in top 10}}{\text{all relevant items}}
+\]
+
+### Hit rate
+
+The fraction of users who receive at least one relevant movie in their top 10.
+
+### NDCG@10
+
+Normalized Discounted Cumulative Gain rewards relevant items placed at higher positions:
+
+\[
+DCG@10=\sum_{i=1}^{10}\frac{relevance_i}{\log_2(i+1)}
+\]
+
+\[
+NDCG@10=\frac{DCG@10}{IDCG@10}
+\]
+
+## Ranking comparison
+
+| Method | Precision@10 | Recall@10 | NDCG@10 | Hit rate |
+|---|---:|---:|---:|---:|
+| Random | 0.0037 | 0.0023 | 0.0037 | 0.0371 |
+| Popularity | 0.1029 | 0.1056 | 0.1346 | 0.6492 |
+| SVD/ALS | 0.0206 | 0.0149 | 0.0227 | 0.1737 |
+| **SVD + popularity prior** | **0.1305** | **0.1279** | **0.1780** | **0.6880** |
+
+All reported numbers are for the synthetic dataset. Results may differ for real MovieLens or another dataset.
+
+---
+
+## Installation
+
+### Prerequisites
+
+- Python 3.10 or later
+- `pip`
+- Internet connection for the first semantic-model download
+- Java 8 or later only if using the desktop client
+
+### Windows
+
+```powershell
+py -m venv .venv
+.venv\Scripts\activate
+python -m pip install --upgrade pip
+python -m pip install -r requirements.txt
 ```
-data/        movies.csv  ratings.csv  users.csv
-backend/     generate_dataset.py  recsys.py  train.py  app.py  movies_seed.py
-frontend/    index.html  style.css  app.js
-java/        MovieRecApp.java
-artifacts/   model.pkl  metrics.json  stats.json  graphs/*.png
-docs/        screenshots
+
+### Linux or macOS
+
+```bash
+python3 -m venv .venv
+source .venv/bin/activate
+python3 -m pip install --upgrade pip
+python3 -m pip install -r requirements.txt
 ```
-REST API: `/api/search` `/api/semantic-search?q=...` `/api/recommend` `/api/user/<id>/recommend` `/api/predict` `/api/top` `/api/metrics` `/api/stats`.
 
-## Scope
-Applications: OTT "more like this", e-commerce, music/books/courses. Limits: cold-start, sparsity (95.5 %), popularity bias, static data.
-Future: neural CF / transformers, context-aware and diversity re-ranking, online learning.
+### Dependencies
 
-## Likely viva questions
-* **Why hybrid?** Content handles new movies (cold start); CF captures taste patterns content can't see.
-* **Why mean-centre?** Some users rate everything 5, others 3; centring compares *preferences*, not scales.
-* **Why shrinkage?** Two movies co-rated by 2 users can have similarity 1.0 by luck; n/(n+25) discounts that.
-* **RMSE vs confusion matrix?** RMSE measures numeric error; the matrix measures like/dislike decisions (precision, recall).
-* **Why ALS?** Each step is a closed-form ridge regression; fast and stable on sparse data.
+- Flask
+- NumPy
+- pandas
+- SciPy
+- scikit-learn
+- Matplotlib
+- `sentence-transformers`
+
+---
+
+## Running the project
+
+## Generate the dataset
+
+The bundled data is already included, but it can be regenerated:
+
+```bash
+python backend/generate_dataset.py
+```
+
+This writes the files under `data/`.
+
+## Train and evaluate
+
+```bash
+python backend/train.py
+```
+
+This:
+
+- creates the 70/15/15 split
+- tunes matrix-factorization and ranking parameters
+- evaluates the models
+- writes metrics and graphs
+- saves the final model to `artifacts/model.pkl`
+
+On the included dataset, training can take about 75 seconds depending on the machine.
+
+## Start the web application
+
+```bash
+python backend/app.py
+```
+
+Open:
+
+```text
+http://127.0.0.1:5000
+```
+
+Do not open `frontend/index.html` directly with `file://`. The frontend needs the Flask API.
+
+## One-command Windows launch
+
+```bat
+run.bat
+```
+
+The script:
+
+- installs dependencies
+- generates missing data
+- trains a missing model
+- starts Flask
+
+## One-command Linux/macOS launch
+
+```bash
+chmod +x run.sh
+./run.sh
+```
+
+## Java desktop client
+
+Keep Flask running, then:
+
+```bash
+cd java
+javac MovieRecApp.java
+java MovieRecApp
+```
+
+The Java client defaults to `http://127.0.0.1:5000`.
+
+---
+
+## Using the applications
+
+## Discover by title
+
+1. Open the Discover view.
+2. Enter part or all of a movie title.
+3. Select one or more movies.
+4. Choose Hybrid, Content, or Collaborative mode.
+5. Adjust the content/collaborative blend.
+6. Optionally filter by genre and year.
+7. View the ranked recommendations and similarity breakdown.
+
+## Describe a movie
+
+Enter a natural-language request such as:
+
+```text
+a feel-good heist film with clever twists
+```
+
+The semantic search ranks the local movie catalog according to the description.
+
+## Personalized recommendations
+
+Enter a user ID from 1 to 6040 to:
+
+- view the user's rating profile
+- inspect favorite genres
+- view previously top-rated movies
+- receive recommendations for unseen movies
+
+## Rating prediction
+
+The prediction endpoint and UI return:
+
+- global mean
+- user bias
+- item bias
+- latent interaction
+- final predicted rating
+
+---
+
+## REST API
+
+The Flask server runs at `http://127.0.0.1:5000`.
+
+| Method | Endpoint | Purpose |
+|---|---|---|
+| GET | `/api/health` | Health, movie, user, and rating counts |
+| GET | `/api/search?q=incep&limit=8` | Title search |
+| GET | `/api/semantic-search?q=...&n=12` | Natural-language semantic search |
+| GET | `/api/genres` | Available genres |
+| GET | `/api/recommend?ids=1,2&mode=hybrid&n=12` | Similar movies |
+| GET | `/api/recommend?title=Inception&mode=content&n=12` | Recommend from a title |
+| GET | `/api/user/1` | User profile |
+| GET | `/api/user/1/recommend?n=12&genre=Action` | Personalized recommendations |
+| GET | `/api/predict?user=1&movie=2` | Predict a rating |
+| GET | `/api/top?n=12&genre=Drama` | Top movies |
+| GET | `/api/metrics` | Training and evaluation metrics |
+| GET | `/api/stats` | Dataset statistics |
+| GET | `/graphs/<filename>.png` | Evaluation graph |
+
+### Example: similar movies
+
+```text
+GET /api/recommend?ids=2&mode=hybrid&n=12&alpha=.45
+```
+
+Example response fields include:
+
+- `query`
+- `results`
+- `score`
+- `match`
+- `content`
+- `collab`
+- `shared_genres`
+- `shared_keywords`
+- `trace`
+- `total_ms`
+
+### Example: prediction
+
+```text
+GET /api/predict?user=10&movie=25
+```
+
+The response includes the final prediction and its four decomposition components.
+
+---
+
+## Project structure
+
+```text
+.
+├── backend/
+│   ├── app.py                 Flask server and REST API
+│   ├── generate_dataset.py    Synthetic dataset generator
+│   ├── movies_seed.py         Seed movie catalog
+│   ├── recsys.py              Recommendation engine and models
+│   ├── semantic.py            Local BGE semantic search
+│   └── train.py               Training and evaluation pipeline
+├── frontend/
+│   ├── index.html             Web interface
+│   ├── style.css              Application styling
+│   └── app.js                 Frontend API integration
+├── java/
+│   └── MovieRecApp.java       Java Swing desktop client
+├── data/
+│   ├── movies.csv
+│   ├── ratings.csv
+│   └── users.csv
+├── artifacts/
+│   ├── model.pkl              Final serialized recommendation engine
+│   ├── metrics.json           Evaluation metrics
+│   ├── stats.json             Dataset statistics
+│   ├── bge_movie_embeddings.npz
+│   └── graphs/                Generated evaluation charts
+├── requirements.txt
+├── run.bat
+├── run.sh
+└── README.md
+```
+
+Generated graphs include:
+
+- Rating distribution
+- Training size and rating statistics
+- Model RMSE comparison
+- Confusion matrices
+- K-factor sweep
+- Ranking metrics
+- Rating-prediction heatmap
+
+---
+
+## Configuration
+
+The main model parameters are defined in `backend/train.py`:
+
+```python
+K = 20
+REG = 0.06
+ITERS = 20
+LIKE = 4
+POP_W = 1.6
+PRED_THRESHOLD = 3.25
+```
+
+The engine can adjust other behavior in `backend/recsys.py`:
+
+- `SHRINK = 25.0` for item-item similarity shrinkage
+- Candidate minimum: 30 ratings
+- Default hybrid alpha: 0.45
+- Maximum taste-profile movies: 5
+
+---
+
+## Limitations
+
+- The default dataset is synthetic, so real-world performance is not guaranteed
+- Popularity and movie-quality patterns can create recommendation bias
+- The item-item matrix is sparse and sensitive to small rating counts
+- Matrix factorization suffers from cold-start for unknown users and movies
+- The semantic model requires a large first download and sufficient memory
+- No user accounts or persistent online learning are implemented
+- A random train/test split can allow the same users or movies to appear in both sets
+- Ranking is evaluated with a single held-out relevance definition: ratings of at least 4
+
+---
+
+## Future improvements
+
+- Deep collaborative filtering with neural networks
+- Sequence-aware recommendation with transformers
+- Cold-start profiles based on a short onboarding quiz
+- Diversity, novelty, and serendipity re-ranking
+- Explainable recommendation cards
+- User authentication and saved taste profiles
+- Real-time feedback and online model updates
+- API authentication and rate limiting
+- Docker deployment
+- Automated unit and integration tests
+
+---
+
+## Troubleshooting
+
+### `Model not found`
+
+Run:
+
+```bash
+python backend/generate_dataset.py
+python backend/train.py
+```
+
+### Port 5000 is already in use
+
+Start Flask on another port:
+
+```bash
+set PORT=5001
+python backend/app.py
+```
+
+PowerShell:
+
+```powershell
+$env:PORT="5001"
+python backend/app.py
+```
+
+### Semantic search is unavailable
+
+Install the dependencies:
+
+```bash
+python -m pip install -r requirements.txt
+```
+
+The first search may take longer because it downloads `BAAI/bge-base-en-v1.5`.
+
+### Java client cannot connect
+
+Make sure:
+
+1. Flask is running
+2. The URL is `http://127.0.0.1:5000`
+3. The Java client is compiled and started in a separate terminal
+
+---
+
+## Viva and interview questions
+
+**Why use a hybrid recommendation system?**
+
+Content filtering handles movies with useful metadata and reduces the cold-start problem. Collaborative filtering captures preferences that are not obvious from genre or keywords.
+
+**Why mean-centre ratings in item-item collaborative filtering?**
+
+Mean-centering removes differences between strict and generous raters and makes similarity reflect preference rather than rating scale.
+
+**Why is similarity shrinkage necessary?**
+
+Two movies rated by the same two users can appear perfectly similar by coincidence. Shrinkage reduces similarity when the shared-user count is small.
+
+**Why use alternating least squares?**
+
+ALS is a closed-form optimization method for sparse matrix factorization. It is stable and efficient when user and item matrices are learned alternately.
+
+**Why use RMSE and MAE?**
+
+RMSE strongly penalizes large errors, while MAE gives the average absolute prediction error. Together they provide different views of rating accuracy.
+
+**What is the difference between rating accuracy and recommendation ranking?**
+
+A model can predict ratings accurately but still produce poor top-N recommendations. Ranking metrics such as Precision@10, Recall@10, NDCG, and hit rate evaluate the actual recommendation list.
+
+**Why use a validation split?**
+
+The validation split tunes model factors, regularization, thresholds, and popularity weight. The test split remains unseen until final reporting, reducing overfitting.
+
+**What are the biggest current limitations?**
+
+The synthetic data, cold-start users and movies, popularity bias, sparse matrices, and the lack of real-time feedback are the main limitations.
