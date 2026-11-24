@@ -102,17 +102,18 @@ The bundled dataset contains **1,000,209 ratings**:
 |---:|---:|
 | Ratings | 1,000,209 |
 | Users | 6,040 |
-| Movies | 3,700 |
+| Movies | 3,883 |
 
-The data is synthetic and is designed to have structure similar to MovieLens-1M. Ratings are generated using combinations of:
+The project currently uses the real **MovieLens-1M** dataset. It contains ratings from 6,040 users for 3,883 movies, totaling 1,000,209 ratings.
 
-- User taste clusters
-- Movie quality and popularity
-- Genre preferences
-- Release-year and popularity effects
-- Random user behavior
+MovieLens-1M is a research dataset commonly used for recommender-system benchmarks. It includes:
 
-The movie catalog includes 194 real famous films, including Hollywood and Bollywood titles. The remaining titles are generated.
+- 1 to 5 star ratings
+- User gender and age metadata
+- Movie titles, release years, and genres
+- 1,000,209 historical interactions
+
+Movie IDs that contain gaps in the original archive are remapped to contiguous IDs during CSV conversion so they remain compatible with the application's sparse matrices.
 
 The generated files are stored in:
 
@@ -128,7 +129,7 @@ data/
 The rating matrix has shape:
 
 \[
-6040 \times 3700
+6040 \times 3883
 \]
 
 It contains 1,000,209 observed ratings out of approximately 22.35 million possible user/movie pairs. This gives approximately 95.5% sparsity.
@@ -139,17 +140,17 @@ The sparsity is calculated as:
 1-\frac{\text{number of ratings}}{\text{number of users} \times \text{number of movies}}
 \]
 
-### Real MovieLens-1M
+### Replacing or restoring the dataset
 
-The project can be adapted to real MovieLens-1M data. The README and application do not require hard-coded synthetic results.
+The active CSV files were generated from MovieLens-1M with:
 
 ```bash
-python backend/generate_dataset.py --movielens path/to/ml-1m
+python backend/generate_dataset.py --movielens path\to\ml-1m
 python backend/train.py
 python backend/app.py
 ```
 
-When reporting results, clearly state whether the metrics come from synthetic data or MovieLens-1M.
+The synthetic backup was saved in `backups/synthetic-20261124-093523/`. Restoring it requires copying the backed-up `data/` and `artifacts/` directories back to the project root and rerunning `python backend/app.py`.
 
 ---
 
@@ -244,12 +245,12 @@ The tuned model uses:
 
 | Parameter | Value |
 |---|---:|
-| Latent factors (`k`) | 20 |
-| Regularization (`reg`) | 0.06 |
+| Latent factors (`k`) | 32 |
+| Regularization (`reg`) | 0.10 |
 | ALS iterations | 20 |
 | Like threshold | 4 stars |
 | Prediction threshold | 3.25 |
-| Popularity prior weight | 1.6 |
+| Popularity prior weight | 2.0 |
 
 The model is trained on the training matrix for evaluation. A final model is retrained on all available ratings and saved to `artifacts/model.pkl` for serving.
 
@@ -326,10 +327,10 @@ MAE reports the average distance between actual and predicted ratings.
 
 | Model | RMSE | MAE |
 |---|---:|---:|
-| Global mean | 1.0653 | 0.9089 |
-| User + item bias | 0.9143 | 0.7441 |
-| Item-kNN, 4,000-rating sample | 0.8656 | 0.6997 |
-| **SVD/ALS, k=20** | **0.8221** | **0.6574** |
+| Global mean | 1.1163 | 0.9334 |
+| User + item bias | 0.9088 | 0.7202 |
+| Item-kNN, 4,000-rating sample | 0.8823 | 0.6922 |
+| **SVD/ALS, k=32** | **0.8684** | **0.6828** |
 
 These values are saved in `artifacts/metrics.json`.
 
@@ -376,13 +377,13 @@ ROC-AUC evaluates how successfully the continuous predicted rating separates lik
 
 | Metric | Result |
 |---|---:|
-| Binary accuracy | 70.9% |
-| Precision | 67.0% |
-| Recall | 89.9% |
-| F1 | 76.8% |
-| ROC-AUC | 0.8165 |
-| Exact 5-star accuracy | 44.99% |
-| Within-one-star accuracy | 93.32% |
+| Binary accuracy | 73.13% |
+| Precision | 70.88% |
+| Recall | 90.58% |
+| F1 | 79.53% |
+| ROC-AUC | 0.8126 |
+| Exact 5-star accuracy | 44.64% |
+| Within-one-star accuracy | 91.96% |
 
 ## Ranking metrics
 
@@ -422,12 +423,12 @@ NDCG@10=\frac{DCG@10}{IDCG@10}
 
 | Method | Precision@10 | Recall@10 | NDCG@10 | Hit rate |
 |---|---:|---:|---:|---:|
-| Random | 0.0037 | 0.0023 | 0.0037 | 0.0371 |
-| Popularity | 0.1029 | 0.1056 | 0.1346 | 0.6492 |
-| SVD/ALS | 0.0206 | 0.0149 | 0.0227 | 0.1737 |
-| **SVD + popularity prior** | **0.1305** | **0.1279** | **0.1780** | **0.6880** |
+| Random | 0.0071 | 0.0039 | 0.0074 | 0.0676 |
+| Popularity | 0.1096 | 0.0836 | 0.1283 | 0.5828 |
+| SVD/ALS | 0.0566 | 0.0387 | 0.0673 | 0.3649 |
+| **SVD + popularity prior** | **0.1204** | **0.0932** | **0.1413** | **0.6149** |
 
-All reported numbers are for the synthetic dataset. Results may differ for real MovieLens or another dataset.
+All reported numbers are for the active real MovieLens-1M dataset.
 
 ---
 
@@ -688,11 +689,11 @@ Generated graphs include:
 The main model parameters are defined in `backend/train.py`:
 
 ```python
-K = 20
-REG = 0.06
+K = 32
+REG = 0.10
 ITERS = 20
 LIKE = 4
-POP_W = 1.6
+POP_W = 2.0
 PRED_THRESHOLD = 3.25
 ```
 
@@ -707,7 +708,7 @@ The engine can adjust other behavior in `backend/recsys.py`:
 
 ## Limitations
 
-- The default dataset is synthetic, so real-world performance is not guaranteed
+- Real-world performance can differ across datasets and deployment conditions
 - Popularity and movie-quality patterns can create recommendation bias
 - The item-item matrix is sparse and sensitive to small rating counts
 - Matrix factorization suffers from cold-start for unknown users and movies
@@ -812,4 +813,4 @@ The validation split tunes model factors, regularization, thresholds, and popula
 
 **What are the biggest current limitations?**
 
-The synthetic data, cold-start users and movies, popularity bias, sparse matrices, and the lack of real-time feedback are the main limitations.
+Cold-start users and movies, popularity bias, sparse matrices, historical-label bias, and the lack of real-time feedback are the main limitations.

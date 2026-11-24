@@ -1,13 +1,8 @@
 """
-Builds the dataset used by the project  ->  data/movies.csv, data/ratings.csv, data/users.csv
+Builds or converts the dataset used by the project -> data/movies.csv, data/ratings.csv, data/users.csv.
 
-* 3,700 movies  (194 well-known real titles + procedurally generated titles)
-* 6,040 users
-* 1,000,209 ratings (1-5 stars)        <- same size as the classic MovieLens-1M
-
-Ratings are NOT random noise: every user has taste clusters (e.g. "sci-fi + thriller lover"),
-every movie has a quality bias and latent traits, so collaborative filtering has real
-structure to learn. If you have the real MovieLens-1M files, run:
+Without arguments, it generates a synthetic 1,000,209-rating dataset. With --movielens,
+it converts real MovieLens-1M files to the project's CSV schema:
     python backend/generate_dataset.py --movielens path/to/ml-1m
 and they will be converted to the same CSV format.
 """
@@ -192,6 +187,10 @@ def from_movielens(path):
     m["keywords"] = ""; m["is_real"] = 1
     r = pd.read_csv(os.path.join(path, "ratings.dat"), sep="::", engine="python", names=["user_id", "movie_id", "rating", "timestamp"])
     u = pd.read_csv(os.path.join(path, "users.dat"), sep="::", engine="python", names=["user_id", "gender", "age", "occ", "zip"])
+    m = m.sort_values("movie_id").reset_index(drop=True)
+    id_map = dict(zip(m["movie_id"], np.arange(1, len(m) + 1)))
+    m["movie_id"] = np.arange(1, len(m) + 1)
+    r["movie_id"] = r["movie_id"].map(id_map)
     return m[["movie_id", "title", "year", "genres", "keywords", "is_real"]], r, u[["user_id", "gender", "age"]]
 
 
