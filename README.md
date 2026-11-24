@@ -132,7 +132,7 @@ The rating matrix has shape:
 6040 \times 3883
 \]
 
-It contains 1,000,209 observed ratings out of approximately 22.35 million possible user/movie pairs. This gives approximately 95.5% sparsity.
+It contains 1,000,209 observed ratings out of 23,453,320 possible user/movie pairs. This gives approximately 95.74% sparsity.
 
 The sparsity is calculated as:
 
